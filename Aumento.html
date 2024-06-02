@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Salarios</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Calculadora de Salarios</h1>
+        <div class="card">
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="cedula">Cédula:</label>
+                    <input type="text" id="cedula" class="form-control">
+                    <span class="error" id="cedula-error"></span>
+                </div>
+                <div class="form-group">
+                    <label for="nombre">Nombre:</label>
+                    <input type="text" id="nombre" class="form-control">
+                    <span class="error" id="nombre-error"></span>
+                </div>
+                <div class="form-group">
+                    <label for="tipo">Tipo de Empleado:</label>
+                    <select id="tipo" class="form-control">
+                        <option value="1">Operario</option>
+                        <option value="2">Técnico</option>
+                        <option value="3">Profesional</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="horas">Cantidad de Horas Laboradas:</label>
+                    <input type="number" id="horas" step="0.01" class="form-control">
+                    <span class="error" id="horas-error"></span>
+                </div>
+                <div class="form-group">
+                    <label for="precioHora">Precio por Hora:</label>
+                    <input type="number" id="precioHora" step="0.01" class="form-control">
+                    <span class="error" id="precioHora-error"></span>
+                </div>
+                <div class="form-group text-center">
+                    <button class="btn btn-primary btn-block" onclick="agregarEmpleado()">Agregar Empleado</button>
+                </div>
+            </div>
+        </div>
+        <div class="results mt-4">
+            <h2>Buscar:</h2>
+            <input type="text" id="search" class="form-control mb-3" placeholder="Buscar por nombre o cédula" oninput="buscarEmpleado()">
+            <ul class="list-group" id="employee-list"></ul>
+            <nav>
+                <ul class="pagination justify-content-center" id="pagination"></ul>
+            </nav>
+        </div>
+        <div class="statistics mt-4">
+            <h2>Estadísticas:</h2>
+            <pre id="estadisticas"></pre>
+            <canvas id="salaryChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación -->
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1" role="dialog" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmDeleteModalLabel">Confirmar Eliminación</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    ¿Está seguro de que desea eliminar este empleado?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="delete-confirm-btn">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let empleados = JSON.parse(localStorage.getItem('empleados')) || [];
+        let editIndex = null;
+        let deleteIndex = null;
+        const itemsPerPage = 5;
+        let currentPage = 1;
+
+        function mostrarError(id, mensaje) {
+            document.getElementById(id).textContent = mensaje;
+        }
+
+        function limpiarErrores() {
+            mostrarError('cedula-error', '');
+            mostrarError('nombre-error', '');
+            mostrarError('horas-error', '');
+            mostrarError('precioHora-error', '');
+        }
+
+        function validarEntrada() {
+            let esValido = true;
+            const cedula = document.getElementById('cedula').value.trim();
+            const nombre = document.getElementById('nombre').value.trim();
+            const horas = document.getElementById('horas').value.trim();
+            const precioHora = document.getElementById('precioHora').value.trim();
+
+            limpiarErrores();
+
+            const regexNombre = /^[a-zA-Z\s]+$/;
+            const regexCedula = /^\d+$/;
+
+            if (!cedula || !regexCedula.test(cedula)) {
+                mostrarError('cedula-error', 'La cédula es obligatoria y debe contener solo números.');
+                esValido = false;
+            }
+            if (!nombre || !regexNombre.test(nombre)) {
+                mostrarError('nombre-error', 'El nombre es obligatorio y debe contener solo letras.');
+                esValido = false;
+            }
+            if (!horas || isNaN(horas) || horas <= 0) {
+                mostrarError('horas-error', 'Ingrese una cantidad válida de horas laboradas.');
+                esValido = false;
+            }
+            if (!precioHora || isNaN(precioHora) || precioHora <= 0) {
+                mostrarError('precioHora-error', 'Ingrese un precio válido por hora.');
+                esValido = false;
+            }
+
+            return esValido;
+        }
+
+        function calcularSalario(tipo, horas, precioHora) {
+            const salarioOrdinario = horas * precioHora;
+            let aumento;
+
+            if (tipo === 1) {
+                aumento = salarioOrdinario * 0.15;
+            } else if (tipo === 2) {
+                aumento = salarioOrdinario * 0.10;
+            } else if (tipo === 3) {
+                aumento = salarioOrdinario * 0.05;
+            }
+
+            const salarioBruto = salarioOrdinario + aumento;
+            const deduccionCCSS = salarioBruto * 0.0917;
+            const salarioNeto = salarioBruto - deduccionCCSS;
+
+            return {
+                salarioOrdinario: salarioOrdinario.toFixed(2),
+                aumento: aumento.toFixed(2),
+                salarioBruto: salarioBruto.toFixed(2),
+                deduccionCCSS: deduccionCCSS.toFixed(2),
+                salarioNeto: salarioNeto.toFixed(2)
+            };
+        }
+
+        function agregarEmpleado() {
+            if (!validarEntrada()) {
+                return;
+            }
+
+            const cedula = document.getElementById('cedula').value.trim();
+            const nombre = document.getElementById('nombre').value.trim();
+            const tipo = parseInt(document.getElementById('tipo').value);
+            const horas = parseFloat(document.getElementById('horas').value);
+            const precioHora = parseFloat(document.getElementById('precioHora').value);
+
+            const salario = calcularSalario(tipo, horas, precioHora);
+
+            const empleado = {
+                cedula,
+                nombre,
+                tipo,
+                horas,
+                precioHora,
+                ...salario
+            };
+
+            if (editIndex !== null) {
+                empleados[editIndex] = empleado;
+                editIndex = null;
+                toastr.success('Empleado actualizado correctamente');
+            } else {
+                empleados.push(empleado);
+                toastr.success('Empleado agregado correctamente');
+            }
+
+            localStorage.setItem('empleados', JSON.stringify(empleados));
+            mostrarEmpleados();
+            mostrarEstadisticas();
+            limpiarFormulario();
+        }
+
+        function mostrarEmpleados() {
+            const lista = document.getElementById('employee-list');
+            lista.innerHTML = '';
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const paginatedItems = empleados.slice(start, end);
+
+            paginatedItems.forEach((empleado, index) => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `
+                    <strong>${empleado.nombre}</strong> (${empleado.cedula})<br>
+                    Tipo: ${empleado.tipo}, Horas: ${empleado.horas}, Precio/Hora: ${empleado.precioHora}<br>
+                    Salario Ordinario: ${empleado.salarioOrdinario}, Aumento: ${empleado.aumento}, Salario Bruto: ${empleado.salarioBruto}, Deducción CCSS: ${empleado.deduccionCCSS}, Salario Neto: ${empleado.salarioNeto}<br>
+                    <button class="btn btn-warning btn-sm edit-btn" onclick="editarEmpleado(${start + index})">Editar</button>
+                    <button class="btn btn-danger btn-sm" onclick="confirmarEliminarEmpleado(${start + index})">Eliminar</button>
+                `;
+                lista.appendChild(li);
+            });
+
+            mostrarPaginacion();
+        }
+
+        function mostrarPaginacion() {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+
+            const totalPages = Math.ceil(empleados.length / itemsPerPage);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#" onclick="cambiarPagina(${i})">${i}</a>`;
+                pagination.appendChild(li);
+            }
+        }
+
+        function cambiarPagina(page) {
+            currentPage = page;
+            mostrarEmpleados();
+        }
+
+        function editarEmpleado(index) {
+            const empleado = empleados[index];
+            document.getElementById('cedula').value = empleado.cedula;
+            document.getElementById('nombre').value = empleado.nombre;
+            document.getElementById('tipo').value = empleado.tipo;
+            document.getElementById('horas').value = empleado.horas;
+            document.getElementById('precioHora').value = empleado.precioHora;
+            editIndex = index;
+        }
+
+        function confirmarEliminarEmpleado(index) {
+            deleteIndex = index;
+            $('#confirmDeleteModal').modal('show');
+        }
+
+        function eliminarEmpleado() {
+            empleados.splice(deleteIndex, 1);
+            localStorage.setItem('empleados', JSON.stringify(empleados));
+            mostrarEmpleados();
+            mostrarEstadisticas();
+            $('#confirmDeleteModal').modal('hide');
+            toastr.success('Empleado eliminado correctamente');
+        }
+
+        document.getElementById('delete-confirm-btn').addEventListener('click', eliminarEmpleado);
+
+        function buscarEmpleado() {
+            const criterio = document.getElementById('search').value.toLowerCase();
+            const lista = document.getElementById('employee-list');
+            lista.innerHTML = '';
+            const resultados = empleados.filter(empleado => 
+                empleado.cedula.includes(criterio) || empleado.nombre.toLowerCase().includes(criterio)
+            );
+            resultados.forEach((empleado, index) => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `
+                    <strong>${empleado.nombre}</strong> (${empleado.cedula})<br>
+                    Tipo: ${empleado.tipo}, Horas: ${empleado.horas}, Precio/Hora: ${empleado.precioHora}<br>
+                    Salario Ordinario: ${empleado.salarioOrdinario}, Aumento: ${empleado.aumento}, Salario Bruto: ${empleado.salarioBruto}, Deducción CCSS: ${empleado.deduccionCCSS}, Salario Neto: ${empleado.salarioNeto}<br>
+                    <button class="btn btn-warning btn-sm edit-btn" onclick="editarEmpleado(${index})">Editar</button>
+                    <button class="btn btn-danger btn-sm" onclick="confirmarEliminarEmpleado(${index})">Eliminar</button>
+                `;
+                lista.appendChild(li);
+            });
+        }
+
+        function mostrarEstadisticas() {
+            const estadisticas = document.getElementById('estadisticas');
+            const countOperarios = empleados.filter(e => e.tipo === 1).length;
+            const totalNetOperarios = empleados.filter(e => e.tipo === 1).reduce((acc, e) => acc + parseFloat(e.salarioNeto), 0);
+            const avgNetOperarios = countOperarios > 0 ? totalNetOperarios / countOperarios : 0;
+
+            const countTecnicos = empleados.filter(e => e.tipo === 2).length;
+            const totalNetTecnicos = empleados.filter(e => e.tipo === 2).reduce((acc, e) => acc + parseFloat(e.salarioNeto), 0);
+            const avgNetTecnicos = countTecnicos > 0 ? totalNetTecnicos / countTecnicos : 0;
+
+            const countProfesionales = empleados.filter(e => e.tipo === 3).length;
+            const totalNetProfesionales = empleados.filter(e => e.tipo === 3).reduce((acc, e) => acc + parseFloat(e.salarioNeto), 0);
+            const avgNetProfesionales = countProfesionales > 0 ? totalNetProfesionales / countProfesionales : 0;
+
+            estadisticas.textContent = `
+            Cantidad Empleados Tipo Operarios: ${countOperarios}
+            Acumulado Salario Neto para Operarios: ${totalNetOperarios.toFixed(2)}
+            Promedio Salario Neto para Operarios: ${avgNetOperarios.toFixed(2)}
+            Cantidad Empleados Tipo Técnicos: ${countTecnicos}
+            Acumulado Salario Neto para Técnicos: ${totalNetTecnicos.toFixed(2)}
+            Promedio Salario Neto para Técnicos: ${avgNetTecnicos.toFixed(2)}
+            Cantidad Empleados Tipo Profesionales: ${countProfesionales}
+            Acumulado Salario Neto para Profesionales: ${totalNetProfesionales.toFixed(2)}
+            Promedio Salario Neto para Profesionales: ${avgNetProfesionales.toFixed(2)}
+            `;
+
+            mostrarGrafico();
+        }
+
+        function mostrarGrafico() {
+            const ctx = document.getElementById('salaryChart').getContext('2d');
+            const countOperarios = empleados.filter(e => e.tipo === 1).length;
+            const countTecnicos = empleados.filter(e => e.tipo === 2).length;
+            const countProfesionales = empleados.filter(e => e.tipo === 3).length;
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Operarios', 'Técnicos', 'Profesionales'],
+                    datasets: [{
+                        label: 'Cantidad de Empleados',
+                        data: [countOperarios, countTecnicos, countProfesionales],
+                        backgroundColor: ['#007bff', '#28a745', '#dc3545']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function limpiarFormulario() {
+            document.getElementById('cedula').value = '';
+            document.getElementById('nombre').value = '';
+            document.getElementById('tipo').value = '1';
+            document.getElementById('horas').value = '';
+            document.getElementById('precioHora').value = '';
+            editIndex = null;
+        }
+
+        window.onload = function() {
+            mostrarEmpleados();
+            mostrarEstadisticas();
+        }
+    </script>
+</body>
+</html>

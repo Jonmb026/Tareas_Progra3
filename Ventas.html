@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Control de Ventas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 400px;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input, select {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .error {
+            color: red;
+            margin-bottom: 10px;
+        }
+
+        .resultados {
+            margin-top: 20px;
+        }
+
+        .venta, .estadisticas {
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .venta p, .estadisticas p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sistema de Control de Ventas</h1>
+        <form id="ventaForm">
+            <label for="factura">Número de Factura:</label>
+            <input type="text" id="factura" disabled><br><br>
+
+            <label for="cedula">Cédula:</label>
+            <input type="text" id="cedula" required><br><br>
+
+            <label for="nombre">Nombre del Comprador:</label>
+            <input type="text" id="nombre" required><br><br>
+
+            <label for="localidad">Localidad:</label>
+            <select id="localidad" required>
+                <option value="1">Sol Norte/Sur</option>
+                <option value="2">Sombra Este/Oeste</option>
+                <option value="3">Preferencial</option>
+            </select><br><br>
+
+            <label for="cantidad">Cantidad de Entradas:</label>
+            <input type="number" id="cantidad" min="1" max="4" required><br><br>
+
+            <button type="submit">Procesar Venta</button>
+        </form>
+        <button id="finalizarVentas">Finalizar Ventas</button>
+
+        <div id="resultados" class="resultados"></div>
+    </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            let facturaCounter = 1;
+            let totalEntradasSol = 0, totalEntradasSombra = 0, totalEntradasPreferencial = 0;
+            let totalDineroSol = 0, totalDineroSombra = 0, totalDineroPreferencial = 0;
+
+            const updateFactura = () => {
+                document.getElementById("factura").value = facturaCounter;
+            };
+
+            updateFactura();
+
+            const isInteger = (str) => {
+                return /^\d+$/.test(str);
+            };
+
+            const isAlpha = (str) => {
+                return /^[a-zA-Z\s]+$/.test(str);
+            };
+
+            document.getElementById("ventaForm").addEventListener("submit", function(event) {
+                event.preventDefault();
+
+                const cedula = document.getElementById("cedula").value;
+                const nombre = document.getElementById("nombre").value;
+                const localidad = document.getElementById("localidad").value;
+                const cantidad = parseInt(document.getElementById("cantidad").value);
+
+                if (!isInteger(cedula) || cedula.length !== 9) {
+                    alert("La cédula debe ser un número entero de 9 dígitos.");
+                    return;
+                }
+
+                if (!isAlpha(nombre)) {
+                    alert("El nombre solo debe contener caracteres alfabéticos.");
+                    return;
+                }
+
+                if (cantidad < 1 || cantidad > 4) {
+                    alert("La cantidad de entradas debe ser entre 1 y 4.");
+                    return;
+                }
+
+                let precioEntrada = 0, nombreLocalidad = "";
+
+                switch (localidad) {
+                    case "1":
+                        precioEntrada = 10500;
+                        nombreLocalidad = "Sol Norte/Sur";
+                        totalEntradasSol += cantidad;
+                        totalDineroSol += cantidad * precioEntrada;
+                        break;
+                    case "2":
+                        precioEntrada = 20500;
+                        nombreLocalidad = "Sombra Este/Oeste";
+                        totalEntradasSombra += cantidad;
+                        totalDineroSombra += cantidad * precioEntrada;
+                        break;
+                    case "3":
+                        precioEntrada = 25500;
+                        nombreLocalidad = "Preferencial";
+                        totalEntradasPreferencial += cantidad;
+                        totalDineroPreferencial += cantidad * precioEntrada;
+                        break;
+                    default:
+                        alert("Localidad inválida.");
+                        return;
+                }
+
+                const subtotal = cantidad * precioEntrada;
+                const cargosServicio = cantidad * 1000;
+                const total = subtotal + cargosServicio;
+
+                const resultadoVenta = `
+                    <div class="venta">
+                        <h3>Venta procesada</h3>
+                        <p><strong>Número de Factura:</strong> ${facturaCounter}</p>
+                        <p><strong>Cédula:</strong> ${cedula}</p>
+                        <p><strong>Nombre comprador:</strong> ${nombre}</p>
+                        <p><strong>Localidad:</strong> ${nombreLocalidad}</p>
+                        <p><strong>Cantidad de Entradas:</strong> ${cantidad}</p>
+                        <p><strong>Subtotal:</strong> ${subtotal} colones</p>
+                        <p><strong>Cargos por Servicios:</strong> ${cargosServicio} colones</p>
+                        <p><strong>Total a pagar:</strong> ${total} colones</p>
+                    </div>
+                `;
+
+                document.getElementById("resultados").innerHTML += resultadoVenta;
+
+                facturaCounter++;
+                updateFactura();
+                document.getElementById("ventaForm").reset();
+            });
+
+            document.getElementById("finalizarVentas").addEventListener("click", () => {
+                const estadisticas = `
+                    <div class="estadisticas">
+                        <h3>Estadísticas finales</h3>
+                        <p><strong>Cantidad Entradas Localidad Sol Norte/Sur:</strong> ${totalEntradasSol}</p>
+                        <p><strong>Acumulado Dinero Localidad Sol Norte/Sur:</strong> ${totalDineroSol} colones</p>
+                        <p><strong>Cantidad Entradas Localidad Sombra Este/Oeste:</strong> ${totalEntradasSombra}</p>
+                        <p><strong>Acumulado Dinero Localidad Sombra Este/Oeste:</strong> ${totalDineroSombra} colones</p>
+                        <p><strong>Cantidad Entradas Localidad Preferencial:</strong> ${totalEntradasPreferencial}</p>
+                        <p><strong>Acumulado Dinero Localidad Preferencial:</strong> ${totalDineroPreferencial} colones</p>
+                    </div>
+                `;
+
+                document.getElementById("resultados").innerHTML += estadisticas;
+            });
+        });
+    </script>
+</body>
+</html>
